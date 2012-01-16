@@ -1,56 +1,39 @@
 package cucumber.runtime;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import cucumber.io.ClasspathResourceLoader;
 import cucumber.io.ResourceLoader;
-import cucumber.runtime.autocomplete.MetaStepdef;
-import cucumber.runtime.autocomplete.StepdefGenerator;
 import cucumber.runtime.model.CucumberFeature;
 import cucumber.runtime.model.CucumberTagStatement;
 import gherkin.formatter.Formatter;
-import gherkin.formatter.Reporter;
 import gherkin.formatter.model.Step;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 
-import static cucumber.runtime.model.CucumberFeature.load;
-import static java.util.Collections.emptyList;
+import static cucumber.runtime.model.CucumberFeature.loadFeatures;
 
 /**
  * This is the main entry point for running Cucumber features.
  */
 public class Runtime {
     private static final byte ERRORS = 0x1;
-    private static final List<Object> NO_FILTERS = emptyList();
-    private static final Collection<String> NO_TAGS = emptyList();
 
     private final UndefinedStepsTracker tracker;
     private final List<Throwable> errors = new ArrayList<Throwable>();
     private final Collection<? extends Backend> backends;
-    private final boolean isDryRun;
-    private final List<String> gluePaths;
+    private final RuntimeOptions runtimeOptions;
     private final ResourceLoader resourceLoader;
 
-    public Runtime(List<String> gluePaths, ResourceLoader resourceLoader) {
-        this(gluePaths, resourceLoader, false);
+    public Runtime(RuntimeOptions runtimeOptions, ResourceLoader resourceLoader) {
+        this(runtimeOptions, resourceLoader, loadBackends(resourceLoader));
     }
 
-    public Runtime(List<String> gluePaths, ResourceLoader resourceLoader, boolean isDryRun) {
-        this(gluePaths, resourceLoader, loadBackends(resourceLoader), isDryRun);
-    }
-
-    public Runtime(List<String> gluePaths, ResourceLoader resourceLoader, Collection<? extends Backend> backends, boolean isDryRun) {
-        this.gluePaths = gluePaths;
+    public Runtime(RuntimeOptions runtimeOptions, ResourceLoader resourceLoader, Collection<? extends Backend> backends) {
+        this.runtimeOptions = runtimeOptions;
         this.backends = backends;
         this.resourceLoader = resourceLoader;
-        this.isDryRun = isDryRun;
         this.tracker = new UndefinedStepsTracker(backends);
     }
 
@@ -62,24 +45,27 @@ public class Runtime {
         errors.add(error);
     }
 
-    public void run(List<String> featurePaths, final List<Object> filters, gherkin.formatter.Formatter formatter, Reporter reporter) {
-        for (CucumberFeature cucumberFeature : load(resourceLoader, featurePaths, filters)) {
-            run(cucumberFeature, formatter, reporter);
+    public void run() {
+        runtimeOptions.writeDotCucumber(runtime);
+        for (CucumberFeature cucumberFeature : loadFeatures(resourceLoader, runtimeOptions.getFeaturePaths(), runtimeOptions.getFilters())) {
+            run(cucumberFeature);
         }
+        runtimeOptions.getFormatter().done();
     }
 
-    public void run(CucumberFeature cucumberFeature, Formatter formatter, Reporter reporter) {
+    public void run(CucumberFeature cucumberFeature) {
+        Formatter formatter = runtimeOptions.getFormatter();
         formatter.uri(cucumberFeature.getUri());
         formatter.feature(cucumberFeature.getFeature());
         for (CucumberTagStatement cucumberTagStatement : cucumberFeature.getFeatureElements()) {
-            cucumberTagStatement.run(formatter, reporter, this);
+            cucumberTagStatement.run(formatter, runtimeOptions.getReporter(), this);
         }
         formatter.eof();
     }
 
     public void buildBackendWorlds(World world) {
         for (Backend backend : backends) {
-            backend.buildWorld(gluePaths, world);
+            backend.buildWorld(runtimeOptions.getGluePaths(), world);
         }
         tracker.reset();
     }
@@ -90,22 +76,8 @@ public class Runtime {
         }
     }
 
-    public void writeStepdefsJson(List<String> featurePaths, File dotCucumber) throws IOException {
-        List<CucumberFeature> features = load(resourceLoader, featurePaths, NO_FILTERS);
-        World world = new RuntimeWorld(this, NO_TAGS);
-        buildBackendWorlds(world);
-        List<StepDefinition> stepDefs = world.getStepDefinitions();
-        List<MetaStepdef> metaStepdefs = new StepdefGenerator().generate(stepDefs, features);
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        String json = gson.toJson(metaStepdefs);
-
-        FileWriter metaJson = new FileWriter(new File(dotCucumber, "stepdefs.json"));
-        metaJson.append(json);
-        metaJson.close();
-    }
-
     public boolean isDryRun() {
-        return isDryRun;
+        return runtimeOptions.isDryRun();
     }
 
     public List<Throwable> getErrors() {

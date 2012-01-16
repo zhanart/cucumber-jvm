@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static cucumber.runtime.Utils.packagePath;
-import static cucumber.runtime.model.CucumberFeature.load;
+import static cucumber.runtime.model.CucumberFeature.loadFeatures;
 import static java.util.Arrays.asList;
 
 /**
@@ -27,9 +27,9 @@ import static java.util.Arrays.asList;
  * Cucumber will look for a {@code .feature} file on the classpath, using the same resource
  * path as the annotated class ({@code .class} substituted by {@code .feature}).
  * <p/>
- * Additional hints can be given to Cucumber by annotating the class with {@link cucumber.junit.Feature}.
+ * Additional hints can be given to Cucumber by annotating the class with {@link Options}.
  *
- * @see cucumber.junit.Feature
+ * @see Options
  */
 public class Cucumber extends ParentRunner<FeatureRunner> {
     private final ResourceLoader resourceLoader = new ClasspathResourceLoader();
@@ -51,7 +51,7 @@ public class Cucumber extends ParentRunner<FeatureRunner> {
         List<String> featurePaths = featurePaths(clazz);
 
         List<String> gluePaths = gluePaths(clazz);
-        runtime = new Runtime(gluePaths, resourceLoader);
+        runtime = new Runtime(runtimeOptions, gluePaths, resourceLoader);
 
         // TODO: Create formatter(s) based on Annotations. Use same technique as in cli.Main for MultiFormatter
         jUnitReporter = new JUnitReporter(new NullReporter(), new NullReporter());
@@ -98,10 +98,10 @@ public class Cucumber extends ParentRunner<FeatureRunner> {
      * @return either a path to a single feature, or to a directory or classpath entry containing them
      */
     private List<String> featurePaths(Class clazz) {
-        cucumber.junit.Feature featureAnnotation = getFeatureAnnotation(clazz);
+        Options optionsAnnotation = getOptionsAnnotation(clazz);
         String featurePath;
-        if (featureAnnotation != null) {
-            featurePath = featureAnnotation.value();
+        if (optionsAnnotation != null) {
+            featurePath = optionsAnnotation.value();
         } else {
             featurePath = packagePath(clazz);
         }
@@ -114,9 +114,9 @@ public class Cucumber extends ParentRunner<FeatureRunner> {
         gluePaths.add(packagePath(clazz));
 
         // Add additional ones
-        cucumber.junit.Feature featureAnnotation = getFeatureAnnotation(clazz);
-        if (featureAnnotation != null) {
-            for (String packageName : featureAnnotation.packages()) {
+        Options optionsAnnotation = getOptionsAnnotation(clazz);
+        if (optionsAnnotation != null) {
+            for (String packageName : optionsAnnotation.glue()) {
                 gluePaths.add(packagePath(packageName));
             }
         }
@@ -124,19 +124,19 @@ public class Cucumber extends ParentRunner<FeatureRunner> {
     }
 
     private List<Object> filters(Class clazz) {
-        cucumber.junit.Feature featureAnnotation = getFeatureAnnotation(clazz);
+        Options optionsAnnotation = getOptionsAnnotation(clazz);
         Object[] filters = new Object[0];
-        if (featureAnnotation != null) {
-            filters = toLong(featureAnnotation.lines());
+        if (optionsAnnotation != null) {
+            filters = toLong(optionsAnnotation.lines());
             if (filters.length == 0) {
-                filters = featureAnnotation.tags();
+                filters = optionsAnnotation.tags();
             }
         }
         return asList(filters);
     }
 
     private void addChildren(List<String> featurePaths, final List<Object> filters, List<String> gluePaths) throws InitializationError {
-        List<CucumberFeature> cucumberFeatures = load(resourceLoader, featurePaths, filters);
+        List<CucumberFeature> cucumberFeatures = loadFeatures(resourceLoader, featurePaths, filters);
         for (CucumberFeature cucumberFeature : cucumberFeatures) {
             children.add(new FeatureRunner(cucumberFeature, gluePaths, runtime, jUnitReporter));
         }
@@ -150,7 +150,7 @@ public class Cucumber extends ParentRunner<FeatureRunner> {
         return longs;
     }
 
-    private Feature getFeatureAnnotation(Class clazz) {
-        return (Feature) clazz.getAnnotation(Feature.class);
+    private Options getOptionsAnnotation(Class clazz) {
+        return (Options) clazz.getAnnotation(Options.class);
     }
 }

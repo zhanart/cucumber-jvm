@@ -7,11 +7,11 @@ import java.lang.annotation.Target;
 
 /**
  * This annotation can be used to give additional hints to the {@link Cucumber} runner
- * about what to run.
+ * about what to run. The various values are similar to what's accepted by {@link cucumber.cli.Main}.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})
-public @interface Feature {
+public @interface Options {
     /**
      * @return the path to the .feature
      */
@@ -30,5 +30,5 @@ public @interface Feature {
     /**
      * @return where to look for glue code (stepdefs and hooks)
      */
-    String[] packages() default {};
+    String[] glue() default {};
 }
