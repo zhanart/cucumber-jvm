@@ -7,7 +7,7 @@
                    (filter #(= "cukes" %))
                    count)]
     (cond
-     (> cukes 3) :happy
+     (>= cukes 3) :happy
      (= cukes 2) :meh
      (= cukes 1) :sad
      :else :hungry)))
